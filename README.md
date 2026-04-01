@@ -1,78 +1,82 @@
 # Azure AI Foundry — Terraform
 
-Deploy Azure AI Foundry (Hub + Project) with Terraform. Features private networking, Managed Identity authentication, and EU data residency support.
+Deploy Azure AI Foundry (Hub + Project) with Terraform. Private networking, Managed Identity, EU data residency.
 
-## Architecture
+---
+
+## 1. What You'll Deploy
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Resource Group (EU Region)                                  │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  Key Vault    │  │  Storage     │  │  AI Services  │      │
-│  │  RBAC mode    │  │  Account     │  │  (Cognitive)  │      │
-│  │  purge prot.  │  │  TLS 1.2     │  │  OpenAI models│      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │ PE               │ PE               │ PE           │
-│         ▼                  ▼                  ▼              │
-│  ┌─────────────────────────────────────────────────┐        │
-│  │           AI Foundry Hub                         │        │
-│  │  SystemAssigned MI · Managed Network             │ ◄─ PE │
-│  │                                                   │        │
-│  │   ┌───────────────────────────────────────┐      │        │
-│  │   │      AI Foundry Project                │      │        │
-│  │   │  + Model Deployments (GPT-4o, etc.)    │      │        │
-│  │   └───────────────────────────────────────┘      │        │
-│  └─────────────────────────────────────────────────┘        │
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  VNet + NSG   │  │  Log         │  │  App         │      │
-│  │  (PE subnet)  │  │  Analytics   │  │  Insights    │      │
-│  └──────────────┘  └──────────────┘  └──────────────┘      │
-│                                                              │
-│  Private DNS Zones: vault, blob, file, cognitive,           │
-│                     azureml, notebooks                       │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Resource Group (EU Region)                                              │
+│                                                                          │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                   │
+│  │  Key Vault   │   │  Storage    │   │ AI Services │                   │
+│  │  (secrets)   │   │  (data)     │   │ (GPT-4o)    │                   │
+│  └──────┬──────┘   └──────┬──────┘   └──────┬──────┘                   │
+│         │                  │                  │                          │
+│         └──────────────────┼──────────────────┘                          │
+│                            ▼                                             │
+│              ┌─────────────────────────┐                                │
+│              │    AI Foundry Hub       │ ◄── Central control plane      │
+│              │    (Managed Identity)   │                                │
+│              │                         │                                │
+│              │  ┌───────────────────┐  │                                │
+│              │  │  AI Foundry       │  │ ◄── Your workspace             │
+│              │  │  Project          │  │                                │
+│              │  │  + GPT-4o model   │  │                                │
+│              │  └───────────────────┘  │                                │
+│              └─────────────────────────┘                                │
+│                            │                                             │
+│         ┌──────────────────┼──────────────────┐                          │
+│         ▼                  ▼                  ▼                          │
+│  ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                   │
+│  │    VNet     │   │    Log      │   │    App      │                   │
+│  │  + NSG      │   │  Analytics  │   │  Insights   │                   │
+│  │  + DNS      │   │  (logs)     │   │ (metrics)   │                   │
+│  └─────────────┘   └─────────────┘   └─────────────┘                   │
+│                                                                          │
+│  Private DNS Zones: vault, blob, file, cognitive, azureml, notebooks    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Features
+---
 
-- Private networking with Private Endpoints
-- Managed Identity authentication (no API keys)
-- EU data residency with DataZoneStandard deployments
-- Key Vault with RBAC and purge protection
-- Storage Account with security hardening
-- Network Security Group on subnets
-- Checkov security scanning compliance
-- Lifecycle ignore for Azure-managed tags
-
-## Prerequisites
-
-- Terraform >= 1.6
-- Azure CLI authenticated (`az login`)
-- Azure Role: Owner or Contributor + User Access Administrator
-
-## Quick Start
+## 2. Prerequisites
 
 ```bash
-cd terraform
+# Required
+terraform >= 1.6
+az login  # Azure CLI authenticated
 
-# Configure
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your values
-
-# Deploy
-terraform init
-terraform plan
-terraform apply
+# Azure Role needed
+Owner  OR  Contributor + User Access Administrator on subscription
 ```
 
-## Remote Backend Setup
+---
 
-The configuration uses Azure Storage for remote state. Create the backend:
+## 3. Choose Your Environment
+
+⚠️ **Pick ONE. Don't deploy both.**
+
+| Setting | **Dev** (`terraform.tfvars`) | **Prod** (`prod.tfvars`) |
+|---------|------------------------------|--------------------------|
+| Use when | Testing, learning, development | Production, sensitive data |
+| Public access | ✅ Yes — access from laptop | ❌ No — needs VPN/Bastion |
+| Network isolation | `AllowInternetOutbound` | `AllowOnlyApprovedOutbound` |
+| High business impact | `false` | `true` |
+| Model capacity | 10 (lower cost) | 50-100 (higher throughput) |
+| Data classification | — | `confidential` |
+| Deploy command | `terraform apply` | `terraform apply -var-file="prod.tfvars"` |
+
+---
+
+## 4. Deploy
+
+### Step 1: Setup Remote Backend (one-time)
 
 ```bash
-# Create resource group and storage account
+# Create storage for Terraform state
 az group create --name rg-terraform-state --location uksouth
 az storage account create --name <unique-name> --resource-group rg-terraform-state --location uksouth --sku Standard_LRS
 az storage container create --name tfstate --account-name <unique-name>
@@ -80,105 +84,153 @@ az storage container create --name tfstate --account-name <unique-name>
 # Update providers.tf with your storage account name
 ```
 
-## File Structure
+### Step 2: Configure
+
+```bash
+cd terraform
+
+# Edit terraform.tfvars with your values:
+# - project_name
+# - location
+# - hub_contributors (your Entra ID Object ID)
+# - project_developers (your Entra ID Object ID)
+
+# Get your Object ID:
+az ad signed-in-user show --query id -o tsv
+```
+
+### Step 3: Deploy
+
+```bash
+# For Development (default)
+terraform init
+terraform plan
+terraform apply
+
+# For Production (only for private access)
+terraform init
+terraform plan -var-file="prod.tfvars"
+terraform apply -var-file="prod.tfvars"
+```
+
+---
+
+## 5. Access AI Foundry
+
+### Dev Environment (public access enabled)
+1. Go to [ai.azure.com](https://ai.azure.com)
+2. Sign in with your Azure account
+3. Select your Hub and Project
+
+### Prod Environment (private access only)
+You need one of these:
+- Azure Bastion + jumpbox VM in the VNet
+- VPN Gateway or ExpressRoute
+- Application with VNet integration
+
+---
+
+## 6. File Structure
 
 ```
 terraform/
-├── providers.tf          # Provider config + backend
-├── variables.tf          # Input variables with validations
-├── locals.tf             # Naming conventions
-├── main.tf               # Resource Group, VNet, Monitoring
-├── security.tf           # Key Vault, Storage Account
-├── ai-foundry.tf         # Hub, Project, AI Services, RBAC
-├── networking.tf         # Private DNS Zones + Private Endpoints
-├── outputs.tf            # Resource IDs and endpoints
-├── terraform.tfvars      # Your configuration
-└── .checkov.yaml         # Security scan exclusions
+├── providers.tf      # Azure provider + remote backend
+├── variables.tf      # Input variables
+├── locals.tf         # Naming conventions
+├── main.tf           # Resource Group, VNet, Monitoring
+├── security.tf       # Key Vault, Storage Account
+├── ai-foundry.tf     # Hub, Project, AI Services, RBAC
+├── networking.tf     # Private DNS + Private Endpoints
+├── outputs.tf        # Resource IDs and endpoints
+├── terraform.tfvars  # Dev configuration ← EDIT THIS
+└── prod.tfvars       # Prod configuration
 ```
 
-## Key Variables
+---
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `project_name` | `aifoundry` | Short identifier (3-12 chars, alphanumeric) |
-| `environment` | `dev` | `dev`, `staging`, or `prod` |
-| `location` | `swedencentral` | Azure region (EU only) |
-| `public_network_access_enabled` | `false` | Enable public access |
-| `disable_local_auth` | `true` | Disable API key authentication |
-| `openai_deployments` | GPT-4o | Model deployments list |
-| `hub_contributors` | `[]` | Entra ID Object IDs for Hub access |
-| `project_developers` | `[]` | Entra ID Object IDs for Project access |
+## 7. Components Explained
 
-## Accessing AI Foundry
+### Core AI
 
-### With Public Access Enabled
-Set `public_network_access_enabled = true` and add your Object ID to RBAC:
+| Component | Purpose |
+|-----------|---------|
+| **AI Foundry Hub** | Control plane — connects storage, key vault, AI services |
+| **AI Foundry Project** | Your workspace — models, data, team access |
+| **AI Services** | Hosts GPT-4o and other models |
+| **Model Deployments** | Specific models with allocated capacity |
 
+### Security
+
+| Component | Purpose |
+|-----------|---------|
+| **Key Vault** | Stores secrets (RBAC mode, purge protection) |
+| **Managed Identity** | Auto-managed credentials, no passwords |
+| **RBAC** | Who can access what |
+
+### Networking
+
+| Component | Purpose |
+|-----------|---------|
+| **VNet** | Private network isolation |
+| **Private Endpoints** | Access services without public internet |
+| **Private DNS Zones** | Route service names to private IPs |
+| **NSG** | Firewall rules |
+
+### Monitoring
+
+| Component | Purpose |
+|-----------|---------|
+| **Log Analytics** | Centralized logs |
+| **App Insights** | Performance metrics |
+| **Storage Account** | Data, models, artifacts |
+
+---
+
+## 8. Model SKUs
+
+| SKU | Data Location | Use Case |
+|-----|---------------|----------|
+| `GlobalStandard` | Any region | Max throughput |
+| `DataZoneStandard` | EU only | EU data residency ✓ |
+| `Standard` | Deployment region | Strictest residency |
+
+---
+
+## 9. Troubleshooting
+
+### State Lock Error
 ```bash
-# Get your Object ID
-az ad signed-in-user show --query id -o tsv
-
-# Add to terraform.tfvars
-hub_contributors = ["your-object-id"]
-project_developers = ["your-object-id"]
-```
-
-### With Private Access Only
-Options:
-1. Deploy a jumpbox VM in the VNet + Azure Bastion
-2. Use VPN Gateway or ExpressRoute
-3. Deploy applications with VNet integration
-
-## Model Deployments
-
-| SKU Type | Processing Location | Use Case |
-|----------|---------------------|----------|
-| `GlobalStandard` | Any Azure region | Maximum throughput |
-| `DataZoneStandard` | EU Data Zone | EU data residency |
-| `Standard` | Deployment region only | Strictest residency |
-
-## Security Checklist
-
-- [x] Private Endpoints for all services
-- [x] Network Security Group on subnets
-- [x] Key Vault with RBAC and purge protection
-- [x] Storage Account with TLS 1.2, no public blobs
-- [x] Managed Identity authentication
-- [x] Lifecycle ignore for Azure-managed tags
-- [x] Checkov security scanning
-
-## Troubleshooting
-
-### State Lock Issues
-```bash
-# Break blob lease
-az storage blob lease break --account-name <storage> --container-name tfstate --blob-name ai-foundry.tfstate --auth-mode key
+# Break the lease
+az storage blob lease break \
+  --account-name <storage> \
+  --container-name tfstate \
+  --blob-name ai-foundry.tfstate
 
 # Or force unlock
 terraform force-unlock <LOCK_ID>
 ```
 
-### Role Assignment Conflicts
-If role assignments already exist, import them:
+### Role Assignment Already Exists
 ```bash
 terraform import 'azurerm_role_assignment.<name>' '<role-assignment-id>'
 ```
 
-### Network Connectivity (EOF errors)
-- Check VPN/proxy settings
-- Verify storage account network rules allow your IP
-- Try different network or wait for transient issues
+### EOF / Network Errors
+- Check VPN/proxy
+- Verify storage firewall allows your IP
+- Wait and retry (transient issues)
 
-## Outputs
+---
 
-| Output | Description |
-|--------|-------------|
-| `resource_group_name` | Resource group name |
-| `ai_foundry_hub_id` | Hub resource ID |
-| `ai_foundry_project_id` | Project resource ID |
-| `ai_services_endpoint` | AI Services endpoint |
-| `hub_principal_id` | Hub Managed Identity |
-| `project_principal_id` | Project Managed Identity |
+## 10. Security Features
+
+- ✅ Private Endpoints for all services
+- ✅ NSG on subnets
+- ✅ Key Vault with RBAC + purge protection
+- ✅ Storage: TLS 1.2, no public blobs
+- ✅ Managed Identity (no API keys)
+
+---
 
 ## License
 
