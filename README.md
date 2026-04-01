@@ -1,8 +1,6 @@
-# Azure AI Foundry — Terraform (Sovereign AI on Azure)
+# Azure AI Foundry — Terraform
 
-Deploy Azure AI Foundry (Hub + Project) with Terraform. Maximizes sovereignty within Azure: private-by-default, Managed Identity only, EU data residency enforced, no API keys.
-
-> **Sovereignty positioning:** This repo implements the "Cloud Private" tier of the sovereignty spectrum — you control identity, network boundaries, data residency, access, and auditability. What you delegate is compute and model hosting. For full sovereignty (your hardware, your models), see [sovereign LLM inference on Apple Silicon](https://medium.com/@yourusername/sovereign-llm-tutorial).
+Deploy Azure AI Foundry (Hub + Project) with Terraform. Features private networking, Managed Identity authentication, and EU data residency support.
 
 ## Architecture
 
@@ -13,7 +11,7 @@ Deploy Azure AI Foundry (Hub + Project) with Terraform. Maximizes sovereignty wi
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
 │  │  Key Vault    │  │  Storage     │  │  AI Services  │      │
 │  │  RBAC mode    │  │  Account     │  │  (Cognitive)  │      │
-│  │  purge prot.  │  │  no SAS keys │  │  no local auth│      │
+│  │  purge prot.  │  │  TLS 1.2     │  │  OpenAI models│      │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
 │         │ PE               │ PE               │ PE           │
 │         ▼                  ▼                  ▼              │
@@ -21,51 +19,43 @@ Deploy Azure AI Foundry (Hub + Project) with Terraform. Maximizes sovereignty wi
 │  │           AI Foundry Hub                         │        │
 │  │  SystemAssigned MI · Managed Network             │ ◄─ PE │
 │  │                                                   │        │
-│  │   ┌───────────────────────────────────┐          │        │
-│  │   │      AI Foundry Project            │          │        │
-│  │   │  + Model Deployments               │          │        │
-│  │   │    (DataZoneStandard = EU only)     │          │        │
-│  │   └───────────────────────────────────┘          │        │
+│  │   ┌───────────────────────────────────────┐      │        │
+│  │   │      AI Foundry Project                │      │        │
+│  │   │  + Model Deployments (GPT-4o, etc.)    │      │        │
+│  │   └───────────────────────────────────────┘      │        │
 │  └─────────────────────────────────────────────────┘        │
 │                                                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │  VNet/Subnet  │  │  Log         │  │  App         │      │
+│  │  VNet + NSG   │  │  Log         │  │  App         │      │
 │  │  (PE subnet)  │  │  Analytics   │  │  Insights    │      │
 │  └──────────────┘  └──────────────┘  └──────────────┘      │
 │                                                              │
-│  Private DNS Zones (6): vault, blob, file, cognitive,       │
-│                          azureml, notebooks                  │
+│  Private DNS Zones: vault, blob, file, cognitive,           │
+│                     azureml, notebooks                       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Sovereignty Defaults
+## Features
 
-Every default is chosen to maximize control within Azure's boundaries:
-
-| Setting | Default | Sovereignty Impact |
-|---|---|---|
-| `location` | `swedencentral` | EU jurisdiction, best Data Zone coverage |
-| `public_network_access_enabled` | `false` | No public attack surface — all traffic through private network |
-| `disable_local_auth` | `true` | No shared secrets — identity via Entra ID only |
-| `openai_deployments[].sku_name` | `DataZoneStandard` | Inference processing stays in EU Data Zone |
-| `managed_network_isolation_mode` | `AllowInternetOutbound` | Hub managed network with outbound control |
-| `high_business_impact` | `false` (set `true` for prod) | Reduces diagnostic telemetry sent to Microsoft |
-| Key Vault | RBAC mode + purge protection | No legacy access policies, no key leakage |
-| Storage Account | No SAS keys, TLS 1.2, no public blob | No credential-based access paths |
+- Private networking with Private Endpoints
+- Managed Identity authentication (no API keys)
+- EU data residency with DataZoneStandard deployments
+- Key Vault with RBAC and purge protection
+- Storage Account with security hardening
+- Network Security Group on subnets
+- Checkov security scanning compliance
+- Lifecycle ignore for Azure-managed tags
 
 ## Prerequisites
 
-- **Terraform** >= 1.6
-- **Azure CLI** authenticated (`az login`)
-- **Azure Role**: Owner or Contributor + User Access Administrator
-- **Registered providers**: `Microsoft.MachineLearningServices`, `Microsoft.CognitiveServices`, `Microsoft.Network`
+- Terraform >= 1.6
+- Azure CLI authenticated (`az login`)
+- Azure Role: Owner or Contributor + User Access Administrator
 
 ## Quick Start
 
 ```bash
-# Clone
-git clone https://github.com/<your-org>/ai-foundry-terraform.git
-cd ai-foundry-terraform
+cd terraform
 
 # Configure
 cp terraform.tfvars.example terraform.tfvars
@@ -73,117 +63,122 @@ cp terraform.tfvars.example terraform.tfvars
 
 # Deploy
 terraform init
-terraform plan -out=tfplan
-terraform apply tfplan
-
-# Verify outputs
-terraform output
+terraform plan
+terraform apply
 ```
 
-### Production Deployment
+## Remote Backend Setup
+
+The configuration uses Azure Storage for remote state. Create the backend:
 
 ```bash
-cp prod.tfvars.example terraform.tfvars
-# Edit, then:
-terraform plan -var-file=terraform.tfvars -out=tfplan
-terraform apply tfplan
+# Create resource group and storage account
+az group create --name rg-terraform-state --location uksouth
+az storage account create --name <unique-name> --resource-group rg-terraform-state --location uksouth --sku Standard_LRS
+az storage container create --name tfstate --account-name <unique-name>
+
+# Update providers.tf with your storage account name
 ```
 
 ## File Structure
 
 ```
-├── providers.tf                    # azurerm ~4.0 + azapi ~2.0
-├── variables.tf                    # All inputs with validations
-├── locals.tf                       # Naming conventions, computed values
-├── main.tf                         # Resource Group, VNet, Monitoring
-├── security.tf                     # Key Vault (RBAC), Storage Account
-├── ai-foundry.tf                   # Hub, Project, AI Services, RBAC
-├── networking.tf                   # Private DNS Zones + Private Endpoints
-├── outputs.tf                      # Resource IDs, endpoints, MI principals
-├── terraform.tfvars.example        # Dev example
-└── prod.tfvars.example             # Hardened production example
+terraform/
+├── providers.tf          # Provider config + backend
+├── variables.tf          # Input variables with validations
+├── locals.tf             # Naming conventions
+├── main.tf               # Resource Group, VNet, Monitoring
+├── security.tf           # Key Vault, Storage Account
+├── ai-foundry.tf         # Hub, Project, AI Services, RBAC
+├── networking.tf         # Private DNS Zones + Private Endpoints
+├── outputs.tf            # Resource IDs and endpoints
+├── terraform.tfvars      # Your configuration
+└── .checkov.yaml         # Security scan exclusions
 ```
 
 ## Key Variables
 
-| Variable | Type | Default | Description |
-|---|---|---|---|
-| `project_name` | `string` | `aifoundry` | Short identifier, used in all names |
-| `environment` | `string` | `dev` | `dev`, `staging`, or `prod` |
-| `location` | `string` | `swedencentral` | EU regions only (validated) |
-| `public_network_access_enabled` | `bool` | `false` | Enable public access |
-| `disable_local_auth` | `bool` | `true` | Disable API keys |
-| `managed_network_isolation_mode` | `string` | `AllowInternetOutbound` | Hub network isolation |
-| `high_business_impact` | `bool` | `false` | HBI mode (reduces telemetry) |
-| `openai_deployments` | `list(object)` | GPT-4o DataZone | Model deployments |
-| `hub_contributors` | `list(string)` | `[]` | Entra ID principals for Hub |
-| `project_developers` | `list(string)` | `[]` | Entra ID principals for Project |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `project_name` | `aifoundry` | Short identifier (3-12 chars, alphanumeric) |
+| `environment` | `dev` | `dev`, `staging`, or `prod` |
+| `location` | `swedencentral` | Azure region (EU only) |
+| `public_network_access_enabled` | `false` | Enable public access |
+| `disable_local_auth` | `true` | Disable API key authentication |
+| `openai_deployments` | GPT-4o | Model deployments list |
+| `hub_contributors` | `[]` | Entra ID Object IDs for Hub access |
+| `project_developers` | `[]` | Entra ID Object IDs for Project access |
 
-## EU Data Residency & Sovereignty
+## Accessing AI Foundry
 
-Model deployment types control where your prompts and completions are physically processed:
-
-| Deployment Type | Processing Location | EU Residency | Sovereignty Level |
-|---|---|---|---|
-| `GlobalStandard` | Any Azure region worldwide | ❌ | None |
-| `DataZoneStandard` | EU Data Zone (any EU member state) | ✅ | Regional |
-| `Standard` | Deployment region only | ✅ (strictest) | Zonal |
-
-This repo defaults to `DataZoneStandard` — best trade-off between compliance and throughput. For maximum control, switch to `Standard` (inference stays in the exact region, e.g., Sweden Central only).
-
-**What this controls:** Where inference processing happens. **What it doesn't:** Model weights, training data, and versioning remain under Microsoft's control. For full model sovereignty, self-hosted open-weight models are the path — see the [sovereign LLM tutorial](https://medium.com/@yourusername/sovereign-llm-tutorial).
-
-**Recommended EU regions:**
-- `swedencentral` — broadest model availability
-- `germanywestcentral` — alternative for DACH compliance
-
-## Managed Network Provisioning
-
-When managed network isolation is enabled, the VNet is **not** provisioned until a compute resource is created or manually triggered:
+### With Public Access Enabled
+Set `public_network_access_enabled = true` and add your Object ID to RBAC:
 
 ```bash
-az ml workspace provision-network \
-  --name $(terraform output -raw ai_foundry_hub_name) \
-  --resource-group $(terraform output -raw resource_group_name)
+# Get your Object ID
+az ad signed-in-user show --query id -o tsv
+
+# Add to terraform.tfvars
+hub_contributors = ["your-object-id"]
+project_developers = ["your-object-id"]
 ```
 
-## Known Limitations
+### With Private Access Only
+Options:
+1. Deploy a jumpbox VM in the VNet + Azure Bastion
+2. Use VPN Gateway or ExpressRoute
+3. Deploy applications with VNet integration
 
-- **Sovereignty boundary**: This setup maximizes control within Azure, but inference compute and model weights remain under Microsoft's control. You own identity, network, data residency, access, and auditability.
-- **Portal access with network isolation**: The new Foundry portal does not support end-to-end network isolation. Use the classic portal, SDK/CLI, or a jump box via Azure Bastion.
-- **azurerm provider gaps**: Workspace connections and some newer Foundry features require the `azapi` provider. See [hashicorp/terraform-provider-azurerm#29956](https://github.com/hashicorp/terraform-provider-azurerm/issues/29956).
-- **Model availability**: Not all models are available in all EU regions or for all deployment types. Check the [region/model matrix](https://learn.microsoft.com/en-us/azure/ai-foundry/reference/region-support).
+## Model Deployments
 
-## Sovereignty & Security Checklist
+| SKU Type | Processing Location | Use Case |
+|----------|---------------------|----------|
+| `GlobalStandard` | Any Azure region | Maximum throughput |
+| `DataZoneStandard` | EU Data Zone | EU data residency |
+| `Standard` | Deployment region only | Strictest residency |
 
-**Data Residency**
-- [ ] Deployment type: `DataZoneStandard` or `Standard` (not `GlobalStandard`)
-- [ ] All resources in an EU region
-- [ ] `high_business_impact = true` for prod (reduces Microsoft telemetry)
+## Security Checklist
 
-**Network Sovereignty**
-- [ ] `public_network_access_enabled = false`
-- [ ] Private Endpoints for all dependencies
-- [ ] DNS zones linked to VNet
-- [ ] `managed_network_isolation_mode = "AllowOnlyApprovedOutbound"` for prod
+- [x] Private Endpoints for all services
+- [x] Network Security Group on subnets
+- [x] Key Vault with RBAC and purge protection
+- [x] Storage Account with TLS 1.2, no public blobs
+- [x] Managed Identity authentication
+- [x] Lifecycle ignore for Azure-managed tags
+- [x] Checkov security scanning
 
-**Identity Sovereignty**
-- [ ] `disable_local_auth = true`
-- [ ] Key Vault: purge protection + RBAC mode
-- [ ] Storage: SAS keys disabled, TLS 1.2
-- [ ] RBAC assignments follow least privilege
+## Troubleshooting
 
-**Operational Sovereignty**
-- [ ] Diagnostic settings active (you own the audit trail)
-- [ ] Terraform state in a secured backend with state locking
-- [ ] All changes through Git (EU AI Act auditability)
+### State Lock Issues
+```bash
+# Break blob lease
+az storage blob lease break --account-name <storage> --container-name tfstate --blob-name ai-foundry.tfstate --auth-mode key
 
-## References
+# Or force unlock
+terraform force-unlock <LOCK_ID>
+```
 
-- [Azure Verified Module: AI Foundry](https://registry.terraform.io/modules/Azure/avm-ptn-aiml-ai-foundry/azurerm/latest)
-- [Microsoft: Terraform for Foundry](https://learn.microsoft.com/en-us/azure/ai-foundry/how-to/create-hub-terraform)
-- [Deployment Types & Data Residency](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/concepts/deployment-types)
-- [AI Foundry Region Support](https://learn.microsoft.com/en-us/azure/ai-foundry/reference/region-support)
+### Role Assignment Conflicts
+If role assignments already exist, import them:
+```bash
+terraform import 'azurerm_role_assignment.<name>' '<role-assignment-id>'
+```
+
+### Network Connectivity (EOF errors)
+- Check VPN/proxy settings
+- Verify storage account network rules allow your IP
+- Try different network or wait for transient issues
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `resource_group_name` | Resource group name |
+| `ai_foundry_hub_id` | Hub resource ID |
+| `ai_foundry_project_id` | Project resource ID |
+| `ai_services_endpoint` | AI Services endpoint |
+| `hub_principal_id` | Hub Managed Identity |
+| `project_principal_id` | Project Managed Identity |
 
 ## License
 

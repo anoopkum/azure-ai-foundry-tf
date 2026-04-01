@@ -17,18 +17,26 @@ resource "azurerm_private_dns_zone" "zones" {
   for_each = local.private_dns_zones
 
   name                = each.value
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = azurerm_resource_group.resource_group_aifoundry.name
   tags                = local.common_tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "links" {
   for_each = local.private_dns_zones
 
   name                  = "link-${each.key}"
-  resource_group_name   = azurerm_resource_group.this.name
+  resource_group_name   = azurerm_resource_group.resource_group_aifoundry.name
   private_dns_zone_name = azurerm_private_dns_zone.zones[each.key].name
-  virtual_network_id    = azurerm_virtual_network.this.id
+  virtual_network_id    = azurerm_virtual_network.vpc_aifoundry.id
   registration_enabled  = false
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # ──────────────────────────────────────────────────────────────
@@ -38,13 +46,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "links" {
 # --- Key Vault ---
 resource "azurerm_private_endpoint" "key_vault" {
   name                = "pe-${local.rn.key_vault}"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.resource_group_aifoundry.location
+  resource_group_name = azurerm_resource_group.resource_group_aifoundry.name
   subnet_id           = azurerm_subnet.private_endpoints.id
 
   private_service_connection {
     name                           = "psc-kv"
-    private_connection_resource_id = azurerm_key_vault.this.id
+    private_connection_resource_id = azurerm_key_vault.key_vault.id
     subresource_names              = ["vault"]
     is_manual_connection           = false
   }
@@ -55,18 +63,22 @@ resource "azurerm_private_endpoint" "key_vault" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # --- Storage Account (Blob) ---
 resource "azurerm_private_endpoint" "storage_blob" {
   name                = "pe-${local.rn.storage_account}-blob"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.resource_group_aifoundry.location
+  resource_group_name = azurerm_resource_group.resource_group_aifoundry.name
   subnet_id           = azurerm_subnet.private_endpoints.id
 
   private_service_connection {
     name                           = "psc-st-blob"
-    private_connection_resource_id = azurerm_storage_account.this.id
+    private_connection_resource_id = azurerm_storage_account.storage_account_foundry.id
     subresource_names              = ["blob"]
     is_manual_connection           = false
   }
@@ -77,18 +89,22 @@ resource "azurerm_private_endpoint" "storage_blob" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # --- Storage Account (File) ---
 resource "azurerm_private_endpoint" "storage_file" {
   name                = "pe-${local.rn.storage_account}-file"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.resource_group_aifoundry.location
+  resource_group_name = azurerm_resource_group.resource_group_aifoundry.name
   subnet_id           = azurerm_subnet.private_endpoints.id
 
   private_service_connection {
     name                           = "psc-st-file"
-    private_connection_resource_id = azurerm_storage_account.this.id
+    private_connection_resource_id = azurerm_storage_account.storage_account_foundry.id
     subresource_names              = ["file"]
     is_manual_connection           = false
   }
@@ -99,18 +115,22 @@ resource "azurerm_private_endpoint" "storage_file" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # --- AI Services ---
 resource "azurerm_private_endpoint" "ai_services" {
   name                = "pe-${local.rn.ai_services}"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.resource_group_aifoundry.location
+  resource_group_name = azurerm_resource_group.resource_group_aifoundry.name
   subnet_id           = azurerm_subnet.private_endpoints.id
 
   private_service_connection {
     name                           = "psc-ais"
-    private_connection_resource_id = azurerm_ai_services.this.id
+    private_connection_resource_id = azurerm_ai_services.azurerm_ai_foundry.id
     subresource_names              = ["account"]
     is_manual_connection           = false
   }
@@ -121,13 +141,17 @@ resource "azurerm_private_endpoint" "ai_services" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }
 
 # --- AI Foundry Hub ---
 resource "azurerm_private_endpoint" "ai_hub" {
   name                = "pe-${local.rn.ai_hub}"
-  location            = azurerm_resource_group.this.location
-  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.resource_group_aifoundry.location
+  resource_group_name = azurerm_resource_group.resource_group_aifoundry.name
   subnet_id           = azurerm_subnet.private_endpoints.id
 
   private_service_connection {
@@ -146,4 +170,8 @@ resource "azurerm_private_endpoint" "ai_hub" {
   }
 
   tags = local.common_tags
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
 }

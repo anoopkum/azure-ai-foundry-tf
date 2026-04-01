@@ -1,6 +1,6 @@
 output "resource_group_name" {
   description = "Name of the resource group."
-  value       = azurerm_resource_group.this.name
+  value       = azurerm_resource_group.resource_group_aifoundry.name
 }
 
 output "ai_foundry_hub_name" {
@@ -15,17 +15,17 @@ output "ai_foundry_hub_id" {
 
 output "ai_foundry_project_name" {
   description = "Name of the AI Foundry Project."
-  value       = azurerm_ai_foundry_project.this.name
+  value       = azurerm_ai_foundry_project.project_name.name
 }
 
 output "ai_foundry_project_id" {
   description = "Resource ID of the AI Foundry Project."
-  value       = azurerm_ai_foundry_project.this.id
+  value       = azurerm_ai_foundry_project.project_name.id
 }
 
 output "ai_services_endpoint" {
   description = "Endpoint of the AI Services (Cognitive Services) account."
-  value       = azurerm_ai_services.this.endpoint
+  value       = azurerm_ai_services.azurerm_ai_foundry.endpoint
 }
 
 output "hub_principal_id" {
@@ -35,7 +35,7 @@ output "hub_principal_id" {
 
 output "project_principal_id" {
   description = "Principal ID of the Project System-Assigned Managed Identity."
-  value       = azurerm_ai_foundry_project.this.identity[0].principal_id
+  value       = azurerm_ai_foundry_project.project_name.identity[0].principal_id
 }
 
 output "private_endpoint_ips" {
@@ -51,5 +51,5 @@ output "private_endpoint_ips" {
 
 output "log_analytics_workspace_id" {
   description = "Resource ID of the Log Analytics Workspace."
-  value       = azurerm_log_analytics_workspace.this.id
+  value       = azurerm_log_analytics_workspace.log_analytics.id
 }
