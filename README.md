@@ -1,6 +1,6 @@
-# Azure AI Foundry — Terraform (Public or Private Access via vNet)
+# Azure AI Foundry — Production-Ready Terraform Deployment
 
-Deploy Azure AI Foundry (Hub + Project) with Terraform. Private networking, Managed Identity, EU data residency.
+Enterprise-grade Azure AI Foundry with Private Endpoints, Managed Identity (no API keys), and EU data residency. Supports both public access for dev and fully private VNet access for production.
 
 ---
 
@@ -59,10 +59,10 @@ Owner  OR  Contributor + User Access Administrator on subscription
 
 ⚠️ **Pick ONE. Don't deploy both.**
 
-| Setting | **Dev** (`terraform.tfvars - public access`) | **Prod** (`prod.tfvars -Private Access via vNet`) |
+| Setting | **Dev** (`terraform.tfvars`) | **Prod** (`prod.tfvars`) |
 |---------|------------------------------|--------------------------|
-| Use when | learning, development | Private access, sensitive data |
-| Public access | ✅ Yes — access from laptop | ❌ No — needs VPN/Bastion |
+| Use when | Learning, development, testing | Production, sensitive data |
+| Access | ✅ Public — access from laptop | ❌ Private — requires VPN/Bastion |
 | Network isolation | `AllowInternetOutbound` | `AllowOnlyApprovedOutbound` |
 | High business impact | `false` | `true` |
 | Model capacity | 10 (lower cost) | 50-100 (higher throughput) |
