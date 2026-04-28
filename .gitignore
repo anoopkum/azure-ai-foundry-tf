@@ -12,7 +12,9 @@ override.tf.json
 *_override.tf.json
 
 # tfvars — may contain secrets
-*.tfvars
+# Allow example tfvars files (no secrets)
+!terraform/terraform.tfvars
+!terraform/prod.tfvars
 !terraform.tfvars.example
 
 # IDE

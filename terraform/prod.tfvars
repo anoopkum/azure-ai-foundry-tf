@@ -1,0 +1,60 @@
+# ──────────────────────────────────────────────────────────────
+# Example: Production environment (maximum security)
+# ──────────────────────────────────────────────────────────────
+
+project_name = "anoopprod"
+environment  = "prod"
+location     = "swedencentral" # or "germanywestcentral" for DACH
+
+tags = {
+  CostCenter = "AI-Platform"
+  Owner      = "platform-team"
+  Compliance = "EU-AI-Act"
+  DataClass  = "confidential"
+}
+
+# Networking — fully locked down
+vnet_address_space              = ["10.20.0.0/16"]
+subnet_private_endpoints_prefix = "10.20.1.0/24"
+public_network_access_enabled   = false
+
+# Security — maximum hardening
+disable_local_auth             = true
+high_business_impact           = true
+managed_network_isolation_mode = "AllowOnlyApprovedOutbound"
+
+# Monitoring
+log_retention_days = 30
+
+# Model deployments — DataZoneStandard enforces EU processing
+openai_deployments = [
+  {
+    name          = "gpt-4o"
+    model_name    = "gpt-4o"
+    model_version = "2024-11-20"
+    sku_name      = "DataZoneStandard"
+    sku_capacity  = 50
+  },
+  {
+    name          = "gpt-4o-mini"
+    model_name    = "gpt-4o-mini"
+    model_version = "2024-07-18"
+    sku_name      = "DataZoneStandard"
+    sku_capacity  = 100
+  },
+  {
+    name          = "text-embedding-ada"
+    model_name    = "text-embedding-ada-002"
+    model_version = "2"
+    sku_name      = "Standard"
+    sku_capacity  = 50
+  },
+]
+
+# RBAC — replace with real Entra ID Object IDs
+hub_contributors = [
+  # "00000000-0000-0000-0000-000000000001", # AI Platform Lead
+]
+project_developers = [
+  # "00000000-0000-0000-0000-000000000002", # ML Engineer Team
+]

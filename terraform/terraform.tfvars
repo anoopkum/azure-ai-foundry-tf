@@ -1,0 +1,46 @@
+# ──────────────────────────────────────────────────────────────
+# Example: Development environment
+# Copy to terraform.tfvars and adjust to your needs.
+# ──────────────────────────────────────────────────────────────
+
+project_name = "anoopdev"
+environment  = "dev"
+location     = "swedencentral"
+
+tags = {
+  CostCenter = "AI-Platform"
+  Owner      = "platform-team"
+  Compliance = "EU-AI-Act"
+}
+
+# Networking
+vnet_address_space              = ["10.10.0.0/16"]
+subnet_private_endpoints_prefix = "10.10.1.0/24"
+public_network_access_enabled   = true
+
+# Security
+disable_local_auth             = true
+high_business_impact           = false
+managed_network_isolation_mode = "AllowInternetOutbound"
+
+# Model deployments
+openai_deployments = [
+  {
+    name          = "gpt-4o"
+    model_name    = "gpt-4o"
+    model_version = "2024-11-20"
+    sku_name      = "DataZoneStandard"
+    sku_capacity  = 10
+  },
+  {
+    name          = "text-embedding-ada"
+    model_name    = "text-embedding-ada-002"
+    model_version = "2"
+    sku_name      = "Standard"
+    sku_capacity  = 10
+  },
+]
+
+# RBAC — Entra ID Object IDs
+hub_contributors   = []
+project_developers = []
